@@ -1,11 +1,11 @@
 import gc
-import uos
 import machine
+import uos
 import utime as time
 import wificonf
 import esp
 import network
-#import volume
+import ntptime
 
 
 # Duplicate the REPL so we can see import usocketit over the USB connection
@@ -27,7 +27,7 @@ def connect_wifi():
 
         print('Connecting to network {:s}...'.format(ssid))
         net.active(True)
-        net.ifconfig(config)
+        # net.ifconfig(config)
         net.connect(ssid, password)
         t = time.ticks_ms()
         while time.ticks_ms() < (t + 30000) and not net.isconnected():
@@ -36,10 +36,11 @@ def connect_wifi():
             #print("Waiting for connection")
     if net.isconnected():
         print("Connected to", ssid)
-
+        return net
     #print('Network config:', net.ifconfig())
 
 
 gc.collect()
 esp.osdebug(None) # turn off vendor O/S debugging messages
-connect_wifi()
+net = connect_wifi()
+ntptime.settime()
