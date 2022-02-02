@@ -1,5 +1,5 @@
 from time import sleep, time
-from machine import ADC, unique_id, Pin, RTC, I2C
+from machine import ADC, unique_id, Pin, RTC, I2C, DEEPSLEEP, deepsleep
 from urequests import post
 import ntptime
 from ustruct import unpack
@@ -119,6 +119,14 @@ class TSensor():
         return "TMP36 ADC"
 
 
+def check_last_rtc_update():
+    f = open("last_t", "r")
+    last_update = int(f.read())
+    f.close()
+    return time() - last_update > 24*3600
+        
+    
+
 def main():
     url = 'http://192.168.1.101:5000/submit'
     rtc = RTC()
@@ -128,61 +136,67 @@ def main():
     #ts = TSensor()
     #p0 = Pin(0, Pin.OUT)
     #p16 = Pin(16, Pin.OUT)
-    t0 = time() - READ_INVERVAL
-    t_updatetime = time()
+    #t0 = time() - READ_INVERVAL
+    #t_updatetime = time()
     
     #p0.on()
     #p16.on()
     
     
-    while True:
-        if (time() - t0) > READ_INVERVAL:
-            t0 = time()
-            temperature_sum = 0
-            for i in range(int(NREADS)):
-                try: 
-                    temperature_sum += ts.temperature
-                except:
-                    pass
-                sleep(0.05)
-            temperature = temperature_sum / NREADS
-                
+    # while True:
+        #if (time() - t0) > READ_INVERVAL:
+        #    t0 = time()
+    temperature_sum = 0
+    for i in range(int(NREADS)):
+        try: 
+            temperature_sum += ts.temperature
+        except:
+            pass
+        sleep(0.05)
+    temperature = temperature_sum / NREADS
+        
 
-            #p0.on()
-            #p16.on()
-            # temperature = ts.read_temp()
-            #p0.off()
-            #p16.off()
-            yy, mo, dd, wd, hh, mm, ss, msec = rtc.datetime()
-            datestr = "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}.{:06d}".format(yy, mo, dd, hh, mm, ss, msec)
-            
-            myobj = {'dev_datestr': datestr,
-                     'id': unpack('>I',unique_id())[0],
-                     'value': temperature,
-                     'device_id': 92,
-                     'datatype': 'temp'}
-            print(myobj)
-        
-        
+    #p0.on()
+    #p16.on()
+    # temperature = ts.read_temp()
+    #p0.off()
+    #p16.off()
+    yy, mo, dd, wd, hh, mm, ss, msec = rtc.datetime()
+    datestr = "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}.{:06d}".format(yy, mo, dd, hh, mm, ss, msec)
+    
+    myobj = {'dev_datestr': datestr,
+             'id': unpack('>I',unique_id())[0],
+             'value': temperature,
+             'device_id': 92,
+             'datatype': 'temp'}
+    print(myobj)
+
+
+    try:
+        resp = post(url, json=myobj)
+        resp.close()
+    
+    except OSError as e:
+        print("Failed to submit data", url, e)
+ 
+    
+    if check_last_rtc_update():
+        print("Updating time")
+        if net.isconnected():
             try:
-                resp = post(url, json=myobj)
-                resp.close()
-            
-            except OSError as e:
-                print("Failed to submit data", url, e)
-        else:
-            sleep(5)
-            
-        if (time() - t_updatetime) > (4*3600):
-            print("Updating time")
-            if net.isconnected():
-                try:
-                    ntptime.settime()
-                except:
-                    print("Failed to set time")
-                        
-            t_updatetime = time()
-
+                ntptime.settime()
+            except:
+                print("Failed to set time")
+                    
+        f = open("last_t", "w")
+        f.write(str(time()))
+        f.close()
+        
+    rtc.irq(trigger=rtc.ALARM0, wake=DEEPSLEEP)
+    rtc.alarm(rtc.ALARM0, 1000 * 60 * 10)
+    deepsleep()
+    
+    
 
 
 if __name__ == '__main__':
