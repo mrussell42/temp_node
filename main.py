@@ -5,6 +5,8 @@ import ntptime
 from ustruct import unpack
 from micropython import const
 
+NODE_ID = 1
+
 DEBUG = False
 READ_INVERVAL = 60*10
 NREADS = 100.
@@ -120,9 +122,12 @@ class TSensor():
 
 
 def check_last_rtc_update():
-    f = open("last_t", "r")
-    last_update = int(f.read())
-    f.close()
+    try:
+        f = open("last_t", "r")
+        last_update = int(f.read())
+        f.close()
+    except OSError:
+        last_update = 0
     return time() - last_update > 24*3600
         
     
@@ -167,7 +172,7 @@ def main():
     myobj = {'dev_datestr': datestr,
              'id': unpack('>I',unique_id())[0],
              'value': temperature,
-             'device_id': 92,
+             'device_id': NODE_ID,
              'datatype': 'temp'}
     print(myobj)
 
@@ -191,7 +196,8 @@ def main():
         f = open("last_t", "w")
         f.write(str(time()))
         f.close()
-        
+    
+    print("Going to Deep Sleep!")
     rtc.irq(trigger=rtc.ALARM0, wake=DEEPSLEEP)
     rtc.alarm(rtc.ALARM0, 1000 * 60 * 10)
     deepsleep()
